@@ -1,2 +1,0 @@
-float32 front_sonar
-float32 back_sonar
