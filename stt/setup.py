@@ -20,6 +20,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            "speech_to_text_controller = stt.speech_to_text_controller:main",
         ],
     },
 )

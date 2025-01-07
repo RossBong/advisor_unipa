@@ -143,11 +143,11 @@ class QiUnipaSpeech(Node):
         path_ros_ws=os.path.join(os.path.abspath(__file__).split("/install")[0])
      
         # Trasferire il file al PC
-        local_output_file = os.path.join(path_ros_ws,"src/audio/audio_recording.wav")
+        local_output_file = os.path.join(path_ros_ws,"src/audio/recording.wav")
         
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect('192.168.254.173', username='nao', password='nao')#'192.168.0.161'
+        ssh.connect('172.20.10.2', username='nao', password='nao')#'192.168.0.161'
 
         sftp = ssh.open_sftp()
         sftp.get(output_file_robot, local_output_file)
@@ -155,9 +155,8 @@ class QiUnipaSpeech(Node):
         ssh.close()
         self.get_logger().info("File trasferito con successo!")
         
-        with wave.open(local_output_file, 'rb') as wav_file:
-                frames = wav_file.readframes(wav_file.getnframes())
-                response.resp = frames
+        
+        response.path = local_output_file
 
         return response
             
@@ -170,7 +169,7 @@ class QiUnipaSpeech(Node):
             msg.data=False
             self.isSpeaking_pub.publish(msg)
         else :
-            self.get_logger().info(f"last_index:{self.last_index}")
+            #self.get_logger().info(f"last_index:{self.last_index}")
             msg.data=True
             self.isSpeaking_pub.publish(msg)
 
