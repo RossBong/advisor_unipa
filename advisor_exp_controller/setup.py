@@ -20,6 +20,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            "explainability_controller= advisor_exp_controller.explainability_controller:main",
         ],
     },
 )

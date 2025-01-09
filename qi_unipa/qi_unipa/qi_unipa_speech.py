@@ -8,7 +8,7 @@ import paramiko
 from rclpy.node import Node
 from std_msgs.msg import Bool,String
 from qi_unipa_msgs.msg import PostureWithSpeed,Track
-from qi_unipa_msgs.srv import Speak
+
 
 class QiUnipaSpeech(Node):  
     def __init__(self):
@@ -39,13 +39,17 @@ class QiUnipaSpeech(Node):
         #Topic subscription
         self.tts_sub = self.create_subscription(String, "/speak", self.set_tts, 10)
 
+        self.record_sub = self.create_subscription(Bool, "/record", self.record_callback, 10)
+
         #Topic publischer
         self.tracking_pub = self.create_publisher(Track, "/track", 10)
         self.posture_pub = self.create_publisher(PostureWithSpeed, "/posture", 10)
         self.isSpeaking_pub=self.create_publisher(Bool,'/is_speaking',10)
 
-        #Service server
-        self.record_srv=self.create_service(Speak,'record',self.record)
+        self.stt_pub =self.create_publisher(String,"/stt",10)
+
+      
+
         
         self.create_timer(0.5, self.check_speaking)
         
@@ -105,7 +109,7 @@ class QiUnipaSpeech(Node):
             self.leds_service.on("FaceLeds")
             
             
-    def record(self, request, response):
+    def record_callback(self, msg):
        
         # Configurazione della registrazione
         channels = [1, 1, 1, 1]  # Abilitare tutti e 4 i microfoni (frontale, posteriore, sinistro, destro)
@@ -147,7 +151,7 @@ class QiUnipaSpeech(Node):
         
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect('172.20.10.2', username='nao', password='nao')#'192.168.0.161'
+        ssh.connect('172.20.10.3', username='nao', password='nao')#'192.168.0.161'
 
         sftp = ssh.open_sftp()
         sftp.get(output_file_robot, local_output_file)
@@ -155,10 +159,14 @@ class QiUnipaSpeech(Node):
         ssh.close()
         self.get_logger().info("File trasferito con successo!")
         
-        
-        response.path = local_output_file
+        res=String()
 
-        return response
+        res.data=local_output_file
+        self.stt_pub.publish(res)
+        
+      
+
+        
             
 
     def check_speaking(self):

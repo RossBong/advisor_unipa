@@ -34,7 +34,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Bumper.msg"
   "msg/Track.msg"
   "msg/StringArray.msg"
-  "srv/Speak.srv"
+  "srv/Record.srv"
+  "srv/Stt.srv"
 )
 
 ament_package()
