@@ -8,7 +8,7 @@ from langchain_core.output_parsers import StrOutputParser
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import START, StateGraph
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage, AIMessage, trim_messages
 from neo4j.exceptions import Neo4jError
 
 from langchain_core.messages import BaseMessage
@@ -27,6 +27,7 @@ class GeneralState(TypedDict):
         next_action: str
         execute_query: bool
         relevant: bool
+        update_output: bool
 
 class Explainability():
 
@@ -49,7 +50,6 @@ class Explainability():
         llm_chat = ChatOpenAI(model="gpt-4o", temperature=0,)#GPT-4o  gpt-3.5-turbo
         llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0)#llama3-70b-8192
       
-
         examples = [
             {
                 "question": "Cosa può mangiare rosario oggi?",
@@ -138,15 +138,13 @@ RETURN * LIMIT 1
             }
         ]
 
-        
-
         guardrails_system= f'''
 Sei un robot di nome Pepper che assiste una persona per l'alimentazione, e quindi per ricette da consigliare, cosa poter mangiare, valutando intolleranze patologie e stili alimentari o diete. Utilizzi come base di conoscenza un database Neo4j che interroghi con le query Cypher.
 Devi verificare le seguenti condizioni:
 1) La domanda posta è pertinente allo scenario corrente, rappresentato dallo schema del grafo?
 2) Attenendoti esclusivamente alle informazioni che possiedi già in memoria, puoi rispondere alla domanda? Concentrati solo sulle informazioni che ti servono per rispondere, non alla risposta della domanda.
 Rispondi ad entrambe esclusivamente con "si" o "no"  (esempio :si no)
-        '''
+'''
 
         guardrails_prompt = ChatPromptTemplate.from_messages(
             [
@@ -186,7 +184,7 @@ Query:
         final_answer_system=f'''
 Sei un robot di nome Pepper che assiste una persona per l'alimentazione e utilizzi come base di conoscenza un database Neo4j che interroghi con le query Cypher.
 Questa persona ti fa delle domande e per rispondere ricavi le informazioni dal database, rielaborandole in un discorso di senso compiuto, spiegando i motivi della risoposta e il ragionamento che hai utilizzato.
-Saluta solo nel primo messaggio, o quando cambia l'utente
+Non salutare in ogni risposta, solo nel primo messaggio o quando cambia l'utente
 '''
 
         generate_final_answer_prompt = ChatPromptTemplate.from_messages(
@@ -201,7 +199,15 @@ Saluta solo nel primo messaggio, o quando cambia l'utente
 
         self.generate_final_answer_chain = generate_final_answer_prompt | llm_chat | StrOutputParser()
 
-        
+        self.trimmer = trim_messages(
+            max_tokens=4000,
+            strategy="last",
+            token_counter=llm_chat,
+            include_system=True,
+            allow_partial=False,
+            start_on="human",
+        )
+
         workflow = StateGraph(GeneralState)
 
         workflow.add_node(self.guardrails)
@@ -223,79 +229,23 @@ Saluta solo nel primo messaggio, o quando cambia l'utente
 
         self.config1 = {"configurable": {"thread_id": "paziente"}}
 
-    def guardrails_condition(self, state: GeneralState):#  -> Literal["generate_final_answer", "generate_query"]:
-        next_action = state.get("next_action")
-        return next_action
-
-    def generate_query(self, state: GeneralState):
-
-        state.setdefault('output', 'nessuno')
-        question = state.get("question")
-        query = self.generate_query_chain.invoke({"question": question, "schema": self.schema , "prec_res": "Output query precedente: "+ state.get("output")})
-        
-        print("\033[1;32mQuery\n\033[0;32m"+query+"\n\033[0m")
-
-        try:
-            output=str(self.graph.query(query))
-        except Neo4jError as e:
-            print("\n\033[1;31mErrore nella query: \033[0;31m"+str(e)+"\n\033[0m")
-            output = state.get("output")
-        
-        print("\033[1;32mOutput:\033\n[0;32m"+output+"\n\033[0m")
-
-        return{
-            "output" : output,
-            "query" : query,
-        }
-
-    def generate_final_answer(self, state: GeneralState):
-        question=state.get("question")
-        if not state.get("relevant"):
-            answer = "Grazie per la tua domanda, ma non risulta pertinente allo scenario attuale."
-        
-        elif not state.get("output"):
-            answer = "Purtroppo non so la risposta, prova a riformulare la domanda."
-        
-        elif state.get("execute_query"):
-            question = f'''
-Data una query, creami un discorso che spieghi i vari controlli che effettua e infine la conclusione a cui sei arrivato. Per ogni step della query fornisci anche il risultato, considerando il suo output, e infine dai un resoconto.
-Query: {state.get("query")}
-Output: {state.get("output")}
-Domanda: {state.get("question")}
-Fornisci una risposta sintetica e discorsiva come se la dovesse pronunciare il robot a voce al paziente in questione, quindi senza elenchi puntati, senza dettagli tecnici sul database e simulando una conversazione.
-'''
-            input_messages = state.get("messages_chat") + [HumanMessage(question)]
-            answer = self.generate_final_answer_chain.invoke({"messages" : input_messages})
-            
-        else:
-            question = f'''
-Attenendoti esclusivamente agli output precedenti, rispondi alla seguente domanda in modo esaustivo spiegando e motivando il perché della risposta e il ragionamento che segui per rispondere.
-Domanda: {state.get("question")}
-Fornisci una risposta sintetica e discorsiva come se la dovesse pronunciare il robot a voce al paziente in questione, quindi senza elenchi puntati e senza dettagli tecnici sul database e simulando una conversazione.
-'''
-            input_messages = state.get("messages_chat") + [HumanMessage(question)]
-            answer = self.generate_final_answer_chain.invoke({"messages" : input_messages})
-        
-        return{
-            "messages_chat" : [HumanMessage(question), AIMessage(answer)]
-        }
-
     def guardrails(self, state: GeneralState):
 
         state.setdefault('output', 'nessuno')
         question = state.get("question")
 
         message = f'''
-    Schema:
-    {self.schema}
+Schema:
+{self.schema}
 
-    Output precedente:
-    {state.get("output")}
+Output precedente:
+{state.get("output")}
 
-    Domanda: {question}
-    '''
+Domanda: {question}
+'''
 
-        input_messages = state.get("messages_guardrails") + [HumanMessage(message)]
+        trimmed_messages = self.trimmer.invoke(state["messages_guardrails"])
+        input_messages = trimmed_messages + [HumanMessage(message)]
         conditions = self.guardrails_chain.invoke({"messages": input_messages})
         print(conditions)
 
@@ -322,13 +272,70 @@ Fornisci una risposta sintetica e discorsiva come se la dovesse pronunciare il r
             "messages_guardrails" : [HumanMessage(message), AIMessage(conditions)],
         }
 
-    
+    def guardrails_condition(self, state: GeneralState):#  -> Literal["generate_final_answer", "generate_query"]:
+        next_action = state.get("next_action")
+        return next_action
 
+    def generate_query(self, state: GeneralState):
+
+        state.setdefault('output', 'nessuno')
+        question = state.get("question")
+        query = self.generate_query_chain.invoke({"question": question, "schema": self.schema , "prec_res": "Output query precedente: "+ state.get("output")})
+        
+        print("\033[1;32mQuery\n\033[0;32m"+query+"\n\033[0m")
+
+        try:
+            output=str(self.graph.query(query))
+            update_output = output!='[]'
+        except Neo4jError as e:
+            print("\n\033[1;31mErrore nella query: \033[0;31m"+str(e)+"\n\033[0m")
+            output = state.get("output")
+            update_output = False
+        
+        print("\033[1;32mOutput:\033\n[0;32m"+output+"\n\033[0m")
+
+        return{
+            "output" : output,
+            "query" : query,
+            "upadate_output" : update_output
+        }
+
+    def generate_final_answer(self, state: GeneralState):
+
+        question=state.get("question")
+        trimmed_messages = self.trimmer.invoke(state["messages_chat"])
+
+        if not state.get("relevant"):
+            answer = "Grazie per la tua domanda, ma non risulta pertinente allo scenario attuale."
+        
+        elif not state.get("output"):
+            answer = "Purtroppo non so la risposta, prova a riformulare la domanda."
+        
+        elif state.get("execute_query"):
+            question = f'''
+Data una query, creami un discorso che spieghi i vari controlli che effettua e infine la conclusione a cui sei arrivato. Per ogni step della query fornisci anche il risultato, considerando il suo output, e infine dai un resoconto.
+Query: {state.get("query")}
+Output: {state.get("output")}
+Domanda: {state.get("question")}
+Fornisci una risposta sintetica e discorsiva come se la dovesse pronunciare il robot a voce al paziente in questione, quindi senza elenchi puntati, senza dettagli tecnici sul database e simulando una conversazione.
+'''
+            input_messages = trimmed_messages + [HumanMessage(question)]
+            answer = self.generate_final_answer_chain.invoke({"messages" : input_messages})
+            
+        else:
+            question = f'''
+Attenendoti esclusivamente agli output precedenti, rispondi alla seguente domanda in modo esaustivo spiegando e motivando il perché della risposta e il ragionamento che segui per rispondere.
+Domanda: {state.get("question")}
+Fornisci una risposta sintetica e discorsiva come se la dovesse pronunciare il robot a voce al paziente in questione, quindi senza elenchi puntati e senza dettagli tecnici sul database e simulando una conversazione.
+'''
+            input_messages = trimmed_messages + [HumanMessage(question)]
+            answer = self.generate_final_answer_chain.invoke({"messages" : input_messages})
+        
+        return{
+            "messages_chat" : [HumanMessage(question), AIMessage(answer)]
+        }
 
     def chat(self,question):
-
-        
-
 
         with open(self.nomefile, "w", encoding="utf-8") as file:
 
@@ -342,6 +349,3 @@ Fornisci una risposta sintetica e discorsiva come se la dovesse pronunciare il r
             file.write(f"Risposta: {answer} {execute_query}\n\n")
 
         return answer
-
-           
-            
