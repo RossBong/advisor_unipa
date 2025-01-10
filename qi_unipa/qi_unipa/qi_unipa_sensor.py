@@ -12,8 +12,9 @@ class QiUnipa_sensor(Node):
     def __init__(self):
         super().__init__('qi_unipa_sensor')
          # Ottieni i parametri
-        self.declare_parameter('ip', '192.168.0.161')
-        self.declare_parameter('port', 9559)
+        self.declare_parameter('ip','192.168.0.161')
+        self.declare_parameter('port',9559)
+  
         ip = self.get_parameter('ip').get_parameter_value().string_value
         port = self.get_parameter('port').get_parameter_value().integer_value
         

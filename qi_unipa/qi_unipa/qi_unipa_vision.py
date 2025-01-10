@@ -24,8 +24,8 @@ class QiUnipa_vision(Node):
         self.bridge = CvBridge()
         
         # Ottieni i parametri
-        self.declare_parameter('ip', '192.168.0.161')
-        self.declare_parameter('port', 9559)
+        self.declare_parameter('ip','192.168.0.161')
+        self.declare_parameter('port',9559)
         self.declare_parameter('camera_index', 0)#0 Top Camera, 1 Bottom Camera
         ip = self.get_parameter('ip').get_parameter_value().string_value
         port = self.get_parameter('port').get_parameter_value().integer_value

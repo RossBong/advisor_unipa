@@ -15,13 +15,13 @@ class QiUnipaSpeech(Node):
         super().__init__('qi_unipa_speech')
         
         # Ottieni i parametri
-        self.declare_parameter('ip', '192.168.0.161')
-        self.declare_parameter('port', 9559)
-        ip = self.get_parameter('ip').get_parameter_value().string_value
+        self.declare_parameter('ip','192.168.0.161')
+        self.declare_parameter('port',9559)
+        self.ip = self.get_parameter('ip').get_parameter_value().string_value
         port = self.get_parameter('port').get_parameter_value().integer_value
         
         # Connessione sessione
-        self.session = self.set_connection(ip, port)
+        self.session = self.set_connection(self.ip, port)
 
         #ALService
         self.memory = self.session.service("ALMemory")
@@ -151,7 +151,7 @@ class QiUnipaSpeech(Node):
         
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect('172.20.10.3', username='nao', password='nao')#'192.168.0.161'
+        ssh.connect(self.ip, username='nao', password='nao')#'192.168.0.161'
 
         sftp = ssh.open_sftp()
         sftp.get(output_file_robot, local_output_file)

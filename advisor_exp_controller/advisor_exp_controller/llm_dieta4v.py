@@ -46,87 +46,94 @@ class Explainability():
         os.makedirs("Conversazioni", exist_ok=True)
         self.nomefile="Conversazioni/conversazione_"+timestamp+".txt"
 
-        #llm_chat = ChatOpenAI(model="gpt-4o", temperature=0,)#GPT-4o  gpt-3.5-turbo
+        llm_chat = ChatOpenAI(model="gpt-4o", temperature=0,)#GPT-4o  gpt-3.5-turbo
         llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0)#llama3-70b-8192
-        llm_chat=llm
+      
 
         examples = [
             {
                 "question": "Cosa può mangiare rosario oggi?",
                 "query": '''
-        MATCH (r:Ricetta), (p:Persona {{nome:'rosario'}})
-        OPTIONAL MATCH(p)-[:ha_mangiato]->(r2:Ricetta)
-        WITH collect(r2.nome) as ricette_mangiate, r, p
-        OPTIONAL MATCH(p)-[:ha_intolleranza]->(i:Intolleranza)-[:vieta]->(r2:Ricetta)
-        WITH collect(r2.nome) as ricette_vietate, ricette_mangiate, r, p, coalesce(i.nome,'nessuna') as intolleranza
-        MATCH (p)-[:ha_patologia]->(pat:Patologia)-[:segue]->(s:StileAlimentare)
-        OPTIONAL MATCH (p)-[:ha_mangiato {{giorno:'mercoledì', tipo_pasto:'pranzo'}}]->(r2:Ricetta)     //controllo se oggi ho pranzato
-        WITH  s.calorie_giornaliere - coalesce(r2.calorie,0) as calorie_rimaste, ricette_vietate, ricette_mangiate, r, s, intolleranza, pat, p
-        MATCH (r)-[c:contiene]->(m:Macronutriente)<-[v:vincola]-(s)
-        WITH collect(c.grammi<=v.grammi_max_pasto) as condizioni, r.nome as nome, calorie_rimaste, ricette_vietate, ricette_mangiate, r, intolleranza, pat, p
-        WHERE ALL(condizione IN condizioni WHERE condizione=true)
-            AND NOT nome IN ricette_mangiate
-            AND NOT nome IN ricette_vietate
-            AND  r.calorie <= calorie_rimaste
-        WITH condizioni as condizioni_proteine_grassi_carboidrati_zuccheri, calorie_rimaste, ricette_vietate, ricette_mangiate, intolleranza, pat.nome as patologia, r.calorie as calorie_ricetta, p.nome as persona, ricetta_consigliata order by rand()
-        RETURN * limit 1
+MATCH (r:Ricetta), (p:Persona {{nome:'rosario'}})
+OPTIONAL MATCH(p)-[:ha_mangiato]->(r2:Ricetta)
+WITH collect(r2.nome) as ricette_mangiate, r, p
+OPTIONAL MATCH(p)-[:ha_intolleranza]->(i:Intolleranza)-[:vieta]->(r2:Ricetta)
+WITH collect(r2.nome) as ricette_vietate, ricette_mangiate, r, p, coalesce(i.nome,'nessuna') as intolleranza
+MATCH (p)-[:ha_patologia]->(pat:Patologia)-[:segue]->(s:StileAlimentare)
+OPTIONAL MATCH (p)-[:ha_mangiato {{giorno:'mercoledì', tipo_pasto:'pranzo'}}]->(r2:Ricetta)     //controllo se oggi ho pranzato
+WITH  s.calorie_giornaliere - coalesce(r2.calorie,0) as calorie_rimaste, ricette_vietate, ricette_mangiate, r, s, intolleranza, pat, p
+MATCH (r)-[c:contiene]->(m:Macronutriente)<-[v:vincola]-(s)
+WITH collect(c.grammi<=v.grammi_max_pasto) as condizioni, r.nome as nome, calorie_rimaste, ricette_vietate, ricette_mangiate, r, intolleranza, pat, p
+WHERE ALL(condizione IN condizioni WHERE condizione=true)
+    AND NOT nome IN ricette_mangiate
+    AND NOT nome IN ricette_vietate
+    AND  r.calorie <= calorie_rimaste
+WITH condizioni as condizioni_proteine_grassi_carboidrati_zuccheri, calorie_rimaste, ricette_vietate, ricette_mangiate, intolleranza, pat.nome as patologia, r.calorie as calorie_ricetta, p.nome as persona, nome as ricetta_consigliata order by rand()
+RETURN * limit 1
         '''
             },
             {
                 "question": "quali ricette può mangiare una persona intollerante al glutine?",
                 "query": '''
-        MATCH (r:Ricetta) 
-        OPTIONAL MATCH (i:Intolleranza {{nome:'glutine'}})-[:vieta]->(r2:Ricetta) 
-        with collect(r2.nome) as ricette_vietate, r
-        WHERE NOT r.nome IN ricette_vietate
-        RETURN collect(r.nome) as ricette_consentite
+MATCH (r:Ricetta) 
+OPTIONAL MATCH (i:Intolleranza {{nome:'glutine'}})-[:vieta]->(r2:Ricetta) 
+with collect(r2.nome) as ricette_vietate, r
+WHERE NOT r.nome IN ricette_vietate
+RETURN collect(r.nome) as ricette_consentite
         ''',
+            },
+                {
+        "question": "quali ricette può mangiare una persona diabetica?",
+        "query": '''MATCH (r:Ricetta)-[c:contiene]->(m:Macronutriente)<-[v:vincola]-(s:StileAlimentare)<-[se:segue]-(p:Patologia {{nome:'diabete'}})
+WITH collect(c.grammi<=v.grammi_max_pasto) as condizioni, r.nome as nome
+WHERE ALL(condizione IN condizioni WHERE condizione=true)
+RETURN collect(nome) as ricette_consentite''',
             },
             {
                 "question": "rosario può mangiare la mozzarella in carrozza?",
                 "query" : '''
-        MATCH (r:Ricetta {{nome: 'mozzarella in carrozza'}}), (p:Persona {{nome:'rosario'}})
-        OPTIONAL MATCH(p)-[:ha_mangiato]->(r2:Ricetta)
-        WITH collect(r2.nome) as ricette_mangiate, r, p
-        OPTIONAL MATCH(p)-[:ha_intolleranza]->(i:Intolleranza)-[:vieta]->(r2:Ricetta)
-        WITH collect(r2.nome) as ricette_vietate, ricette_mangiate, r, p, coalesce(i.nome,'nessuna') as intolleranza
-        MATCH (p)-[:ha_patologia]->(pat:Patologia)-[:segue]->(s:StileAlimentare)
-        OPTIONAL MATCH (p)-[:ha_mangiato {{giorno:'mercoledì', tipo_pasto:'pranzo'}}]->(r2:Ricetta)     //controllo se oggi ho pranzato
-        WITH  s.calorie_giornaliere - coalesce(r2.calorie,0) as calorie_rimaste, ricette_vietate, ricette_mangiate, r, s, intolleranza, pat,coalesce(r2.calorie,0) as calorie_pranzo, p
-        MATCH (r)-[c:contiene]->(m:Macronutriente)<-[v:vincola]-(s)
-        WITH collect(c.grammi<=v.grammi_max_pasto) as condizioni, r.nome as nome, calorie_rimaste, ricette_vietate, ricette_mangiate, r, intolleranza, pat, calorie_pranzo, p
-        WITH
-            CASE
-                    WHEN ALL(condizione IN condizioni WHERE condizione=true)
-                        AND NOT nome IN ricette_mangiate
-                        AND NOT nome IN ricette_vietate
-                        AND  r.calorie <= calorie_rimaste
-                        THEN true
-                    ELSE false
-            END as consentita, calorie_rimaste, calorie_pranzo, ricette_vietate, ricette_mangiate, condizioni as condizioni_proteine_grassi_carboidrati_zuccheri, r.calorie as calorie_ricetta, intolleranza, pat.nome as patologia, p.nome as persona
-        RETURN *
+MATCH (r:Ricetta {{nome: 'mozzarella in carrozza'}}), (p:Persona {{nome:'rosario'}})
+OPTIONAL MATCH(p)-[:ha_mangiato]->(r2:Ricetta)
+WITH collect(r2.nome) as ricette_mangiate, r, p
+OPTIONAL MATCH(p)-[:ha_intolleranza]->(i:Intolleranza)-[:vieta]->(r2:Ricetta)
+WITH collect(r2.nome) as ricette_vietate, ricette_mangiate, r, p, coalesce(i.nome,'nessuna') as intolleranza
+MATCH (p)-[:ha_patologia]->(pat:Patologia)-[:segue]->(s:StileAlimentare)
+OPTIONAL MATCH (p)-[:ha_mangiato {{giorno:'mercoledì', tipo_pasto:'pranzo'}}]->(r2:Ricetta)     //controllo se oggi ho pranzato
+WITH  s.calorie_giornaliere - coalesce(r2.calorie,0) as calorie_rimaste, ricette_vietate, ricette_mangiate, r, s, intolleranza, pat,coalesce(r2.calorie,0) as calorie_pranzo, p
+MATCH (r)-[c:contiene]->(m:Macronutriente)<-[v:vincola]-(s)
+WITH collect(c.grammi<=v.grammi_max_pasto) as condizioni, r.nome as nome, calorie_rimaste, ricette_vietate, ricette_mangiate, r, intolleranza, pat, calorie_pranzo, p
+WITH
+    CASE
+            WHEN ALL(condizione IN condizioni WHERE condizione=true)
+                AND NOT nome IN ricette_mangiate
+                AND NOT nome IN ricette_vietate
+                AND  r.calorie <= calorie_rimaste
+                THEN true
+            ELSE false
+    END as consentita, calorie_rimaste, calorie_pranzo, ricette_vietate, ricette_mangiate, condizioni as condizioni_proteine_grassi_carboidrati_zuccheri, r.calorie as calorie_ricetta, intolleranza, pat.nome as patologia, p.nome as persona
+RETURN *
         '''
             },
             {
                 "question": "sono rosario, dammi un'alternativa al salmone grigliato",
                 "query": '''
-        MATCH (r:Ricetta), (p:Persona {{nome:'rosario'}}), (r3:Ricetta {{nome:'salmone grigliato'}})
-        OPTIONAL MATCH(p)-[:ha_mangiato]->(r2:Ricetta)
-        WITH collect(r2.nome) as ricette_mangiate, r, p, r3.nome as ricetta_non_voluta
-        OPTIONAL MATCH(p)-[:ha_intolleranza]->(i:Intolleranza)-[:vieta]->(r2:Ricetta)
-        WITH collect(r2.nome) as ricette_vietate, ricette_mangiate, r, p, coalesce(i.nome,'nessuna') as intolleranza, ricetta_non_voluta
-        MATCH (p)-[:ha_patologia]->(pat:Patologia)-[:segue]->(s:StileAlimentare)
-        OPTIONAL MATCH (p)-[:ha_mangiato {{giorno:'mercoledì', tipo_pasto:'pranzo'}}]->(r2:Ricetta)     //controllo se oggi ho pranzato
-        WITH  s.calorie_giornaliere - coalesce(r2.calorie,0) as calorie_rimaste, ricette_vietate, ricette_mangiate, r, s, intolleranza, pat, p, ricetta_non_voluta
-        MATCH (r)-[c:contiene]->(m:Macronutriente)<-[v:vincola]-(s)
-        WITH collect(c.grammi<=v.grammi_max_pasto) as condizioni, r.nome as nome, calorie_rimaste, ricette_vietate, ricette_mangiate, r, intolleranza, pat, p, ricetta_non_voluta
-        WHERE ALL(condizione IN condizioni WHERE condizione=true)
-            AND NOT nome IN ricette_mangiate
-            AND NOT nome IN ricette_vietate
-            AND  r.calorie <= calorie_rimaste
-            AND nome <> ricetta_non_voluta
-        WITH condizioni as condizioni_proteine_grassi_carboidrati_zuccheri, calorie_rimaste, ricette_vietate, ricette_mangiate, intolleranza, pat.nome as patologia, r.calorie as calorie_ricetta, p.nome as persona, nome as ricetta_consigliata order by rand()
-        RETURN * LIMIT 1
+MATCH (r:Ricetta), (p:Persona {{nome:'rosario'}}), (r3:Ricetta {{nome:'salmone grigliato'}})
+OPTIONAL MATCH(p)-[:ha_mangiato]->(r2:Ricetta)
+WITH collect(r2.nome) as ricette_mangiate, r, p, r3.nome as ricetta_non_voluta
+OPTIONAL MATCH(p)-[:ha_intolleranza]->(i:Intolleranza)-[:vieta]->(r2:Ricetta)
+WITH collect(r2.nome) as ricette_vietate, ricette_mangiate, r, p, coalesce(i.nome,'nessuna') as intolleranza, ricetta_non_voluta
+MATCH (p)-[:ha_patologia]->(pat:Patologia)-[:segue]->(s:StileAlimentare)
+OPTIONAL MATCH (p)-[:ha_mangiato {{giorno:'mercoledì', tipo_pasto:'pranzo'}}]->(r2:Ricetta)     //controllo se oggi ho pranzato
+WITH  s.calorie_giornaliere - coalesce(r2.calorie,0) as calorie_rimaste, ricette_vietate, ricette_mangiate, r, s, intolleranza, pat, p, ricetta_non_voluta
+MATCH (r)-[c:contiene]->(m:Macronutriente)<-[v:vincola]-(s)
+WITH collect(c.grammi<=v.grammi_max_pasto) as condizioni, r.nome as nome, calorie_rimaste, ricette_vietate, ricette_mangiate, r, intolleranza, pat, p, ricetta_non_voluta
+WHERE ALL(condizione IN condizioni WHERE condizione=true)
+    AND NOT nome IN ricette_mangiate
+    AND NOT nome IN ricette_vietate
+    AND  r.calorie <= calorie_rimaste
+    AND nome <> ricetta_non_voluta
+WITH condizioni as condizioni_proteine_grassi_carboidrati_zuccheri, calorie_rimaste, ricette_vietate, ricette_mangiate, intolleranza, pat.nome as patologia, r.calorie as calorie_ricetta, p.nome as persona, nome as ricetta_consigliata order by rand()
+RETURN * LIMIT 1
         '''
             }
         ]
@@ -134,11 +141,11 @@ class Explainability():
         
 
         guardrails_system= f'''
-        Sei un robot di nome Pepper che assiste una persona per l'alimentazione, e quindi per ricette da consigliare, cosa poter mangiare, valutando intolleranze patologie e stili alimentari o diete. Utilizzi come base di conoscenza un database Neo4j che interroghi con le query Cypher.
-        Devi verificare le seguenti condizioni:
-        1) La domanda posta è pertinente allo scenario corrente, rappresentato dallo schema del grafo?
-        2) Attenendoti esclusivamente alle informazioni che possiedi già in memoria, puoi rispondere alla domanda? Concentrati solo sulle informazioni che ti servono per rispondere, non alla risposta della domanda.
-        Rispondi ad entrambe esclusivamente con "si" o "no"  (esempio :si no)
+Sei un robot di nome Pepper che assiste una persona per l'alimentazione, e quindi per ricette da consigliare, cosa poter mangiare, valutando intolleranze patologie e stili alimentari o diete. Utilizzi come base di conoscenza un database Neo4j che interroghi con le query Cypher.
+Devi verificare le seguenti condizioni:
+1) La domanda posta è pertinente allo scenario corrente, rappresentato dallo schema del grafo?
+2) Attenendoti esclusivamente alle informazioni che possiedi già in memoria, puoi rispondere alla domanda? Concentrati solo sulle informazioni che ti servono per rispondere, non alla risposta della domanda.
+Rispondi ad entrambe esclusivamente con "si" o "no"  (esempio :si no)
         '''
 
         guardrails_prompt = ChatPromptTemplate.from_messages(
@@ -161,15 +168,15 @@ class Explainability():
             examples = examples,
             example_prompt  = example_prompt_template,
             prefix = '''
-        Tu sei un Robot di nome Pepper, esperto in Neo4j. Data una domanda in input crea una query Cypher sintatticamente corretta da eseguire.
-        Qui trovi lo schema con le informazioni del database neo4j:
-        {schema}.
-        Sotto trovi un numero di esempi di domande e la loro corrispettiva query Cypher.''',
-            suffix = '''
-        Oggi è '''+self.giorno+'''. Ritornami esclusivamente la query da eseguire e non aggiungere altro testo. Rispondi in italiano.
-        {prec_res}
-        Domanda: {question}
-        Query: 
+Tu sei un Robot di nome Pepper, esperto in Neo4j. Data una domanda in input crea una query Cypher sintatticamente corretta da eseguire.
+Qui trovi lo schema con le informazioni del database neo4j:
+{schema}.
+Sotto trovi un numero di esempi di domande e la loro corrispettiva query Cypher.''',
+    suffix = '''
+Oggi è '''+self.giorno+'''. Ritornami esclusivamente la query da eseguire e non aggiungere altro testo. Rispondi in italiano.
+{prec_res}
+Domanda: {question}
+Query: 
         ''',
             input_variables = ["question", "schema","prec_res"],
         )
@@ -177,10 +184,10 @@ class Explainability():
         self.generate_query_chain = generate_query_prompt | llm | StrOutputParser()
 
         final_answer_system=f'''
-        Sei un robot di nome Pepper che assiste una persona per l'alimentazione e utilizzi come base di conoscenza un database Neo4j che interroghi con le query Cypher.
-        Questa persona ti fa delle domande e per rispondere ricavi le informazioni dal database, rielaborandole in un discorso di senso compiuto, spiegando i motivi della risoposta e il ragionamento che hai utilizzato.
-        Saluta solo nel primo messaggio, o quando cambia l'utente
-        '''
+Sei un robot di nome Pepper che assiste una persona per l'alimentazione e utilizzi come base di conoscenza un database Neo4j che interroghi con le query Cypher.
+Questa persona ti fa delle domande e per rispondere ricavi le informazioni dal database, rielaborandole in un discorso di senso compiuto, spiegando i motivi della risoposta e il ragionamento che hai utilizzato.
+Saluta solo nel primo messaggio, o quando cambia l'utente
+'''
 
         generate_final_answer_prompt = ChatPromptTemplate.from_messages(
             [
@@ -251,21 +258,21 @@ class Explainability():
         
         elif state.get("execute_query"):
             question = f'''
-    Data una query, creami un discorso che spieghi i vari controlli che effettua e infine la conclusione a cui sei arrivato. Per ogni step della query fornisci anche il risultato, considerando il suo output, e infine dai un resoconto.
-    Query: {state.get("query")}
-    Output: {state.get("output")}
-    Domanda: {state.get("question")}
-    Fornisci una risposta sintetica e discorsiva come se la dovesse pronunciare il robot a voce al paziente in questione, quindi senza elenchi puntati, senza dettagli tecnici sul database e simulando una conversazione.
-    '''
+Data una query, creami un discorso che spieghi i vari controlli che effettua e infine la conclusione a cui sei arrivato. Per ogni step della query fornisci anche il risultato, considerando il suo output, e infine dai un resoconto.
+Query: {state.get("query")}
+Output: {state.get("output")}
+Domanda: {state.get("question")}
+Fornisci una risposta sintetica e discorsiva come se la dovesse pronunciare il robot a voce al paziente in questione, quindi senza elenchi puntati, senza dettagli tecnici sul database e simulando una conversazione.
+'''
             input_messages = state.get("messages_chat") + [HumanMessage(question)]
             answer = self.generate_final_answer_chain.invoke({"messages" : input_messages})
             
         else:
             question = f'''
-    Attenendoti esclusivamente agli output precedenti, rispondi alla seguente domanda in modo esaustivo spiegando e motivando il perché della risposta e il ragionamento che segui per rispondere.
-    Domanda: {state.get("question")}
-    Fornisci una risposta sintetica e discorsiva come se la dovesse pronunciare il robot a voce al paziente in questione, quindi senza elenchi puntati e senza dettagli tecnici sul database e simulando una conversazione.
-    '''
+Attenendoti esclusivamente agli output precedenti, rispondi alla seguente domanda in modo esaustivo spiegando e motivando il perché della risposta e il ragionamento che segui per rispondere.
+Domanda: {state.get("question")}
+Fornisci una risposta sintetica e discorsiva come se la dovesse pronunciare il robot a voce al paziente in questione, quindi senza elenchi puntati e senza dettagli tecnici sul database e simulando una conversazione.
+'''
             input_messages = state.get("messages_chat") + [HumanMessage(question)]
             answer = self.generate_final_answer_chain.invoke({"messages" : input_messages})
         

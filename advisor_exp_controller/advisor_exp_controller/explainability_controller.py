@@ -36,7 +36,9 @@ class Explainability_Controller(Node):
             res=String()
             res.data='È stato un piacere aiutarti. A presto!'
             self.speak_pub.publish(res)
-
+            self.destroy_node()
+            rclpy.shutdown()
+            exit()
     
 
           
