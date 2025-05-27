@@ -33,7 +33,7 @@ class Explainability():
 
     def __init__(self):
 
-        os.environ["NEO4J_URI"] = "bolt://localhost:7687"
+        os.environ["NEO4J_URI"] = "bolt://192.168.0.111:7687"
         os.environ["NEO4J_USERNAME"] = "neo4j"
         os.environ["NEO4J_PASSWORD"] = "robolabs"
 
@@ -41,7 +41,7 @@ class Explainability():
         os.environ["OPENAI_API_KEY"]
 
         oggi = datetime.now()
-        locale.setlocale(locale.LC_TIME, "it_IT.UTF-8")
+        #locale.setlocale(locale.LC_TIME, "it_IT.UTF-8")
         self.giorno = oggi.strftime("%a")
         timestamp = oggi.strftime("%Y-%m-%d_%H-%M-%S")
         os.makedirs("Conversazioni", exist_ok=True)

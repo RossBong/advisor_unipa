@@ -165,10 +165,6 @@ class QiUnipaSpeech(Node):
         self.stt_pub.publish(res)
         
       
-
-        
-            
-
     def check_speaking(self):
         msg=Bool()
         status=self.memory.getData("ALTextToSpeech/Status")
@@ -177,7 +173,6 @@ class QiUnipaSpeech(Node):
             msg.data=False
             self.isSpeaking_pub.publish(msg)
         else :
-            #self.get_logger().info(f"last_index:{self.last_index}")
             msg.data=True
             self.isSpeaking_pub.publish(msg)
 

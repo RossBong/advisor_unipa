@@ -5,7 +5,7 @@ from rclpy.node import Node
 from std_msgs.msg import Bool,String,Int32
 
 
-from .whisper_hugging import WhisperHugging
+from .whisper_groq import WhisperGroq
 
 
 
@@ -17,8 +17,7 @@ class Speech_Controller(Node):
 
         self.transcription_pub =self.create_publisher(String,"/transcription",10)
 
-
-        self.whisper = WhisperHugging()
+        self.whisper = WhisperGroq()
   
 
              

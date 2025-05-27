@@ -19,12 +19,15 @@ class QiUnipa_Movement(Node):
         # Connessione sessione
         self.session = self.set_connection(ip, port)
 
-        self.subscription1 = self.create_subscription(Int32, "/state", self.set_state, 10)
-        self.subscription2= self.create_subscription(JointAnglesWithSpeed, "/joint_angles_with_speed", self.set_joint_angles_with_speed, 10)
-        self.subscription3 = self.create_subscription(Vector3, "/walk", self.set_walking, 10)
-        self.subscription4 = self.create_subscription(PostureWithSpeed, "/posture", self.set_posture, 10)
-        self.subscription5 = self.create_subscription(Hand, "/hands", self.set_hand, 10)
-        self.getPosition_pub = self.create_publisher(Vector3, "/position", 10)
+        self.motion_service = self.session.service("ALMotion")
+        self.posture_service = self.session.service("ALRobotPosture")
+
+        self.state_sub = self.create_subscription(Int32, "/state", self.set_state, 10)
+        self.angles_sub= self.create_subscription(JointAnglesWithSpeed, "/set_angles", self.set_angles, 10)
+        self.walk_sub = self.create_subscription(Vector3, "/walk", self.set_walking, 10)
+        self.posture_sub = self.create_subscription(PostureWithSpeed, "/posture", self.set_posture, 10)
+        self.hands_sub = self.create_subscription(Hand, "/hands", self.set_hand, 10)
+        self.position_pub = self.create_publisher(Vector3, "/position", 10)
 
         self.timer = self.create_timer(1.0, self.get_position)
 
@@ -41,52 +44,46 @@ class QiUnipa_Movement(Node):
 
     def set_state(self, msg):
         state = msg.data
-        state_service = self.session.service("ALMotion")
         if state == 0:
-            state_service.wakeUp()
+            self.motion_service.wakeUp()
         else:
-            state_service.rest()
+            self.motion_service.rest()
 
     def set_joint_angles_with_speed(self, msg):
         names = msg.names
         angles = msg.angles.tolist()
         speed = msg.speed
-        joints_service = self.session.service("ALMotion")
-        joints_service.angleInterpolationWithSpeed(names, angles, speed)
+        self.motion_service.setAngles(names, angles, speed)
 
     def set_walking(self, msg):
         x = msg.x
         y = msg.y
         theta = msg.z
-        walk_service = self.session.service("ALMotion")
-        walk_service.moveTo(x,y,theta)
+        self.motion_service.moveToward(x,y,theta)
 
     def set_posture(self, msg):
         pose_name = msg.posture_name
         speed = msg.speed
-        posture_service = self.session.service("ALRobotPosture")
-        posture_service.goToPosture(pose_name,speed)
+        self.posture_service.goToPosture(pose_name, speed)
     
     def set_hand(self, msg):
         hand = msg.hand
         fun = msg.fun
-        hand_service = self.session.service("ALMotion")
         if hand == "Hands":
             if fun == 0:
-                hand_service.openHand("RHand")
-                hand_service.openHand("LHand")
+                self.motion_service.openHand("RHand")
+                self.motion_service.openHand("LHand")
             else:
-                hand_service.closeHand("RHand")
-                hand_service.closeHand("LHand")
+                self.motion_service.closeHand("RHand")
+                self.motion_service.closeHand("LHand")
         else:
             if fun == 0:
-                hand_service.openHand(hand)
+                self.motion_service.openHand(hand)
             else:
-                hand_service.closeHand(hand)
+                self.motion_service.closeHand(hand)
 
     def get_position(self):
-        motion_service = self.session.service("ALMotion")
-        pose=motion_service.getRobotPosition(False)
+        pose=self.motion_service.getRobotPosition(False)
         msg=Vector3()
         msg.x=pose[0]
         msg.y=pose[1]
@@ -94,8 +91,6 @@ class QiUnipa_Movement(Node):
         self.getPosition_pub.publish(msg)
     
     
-
-
 def main(args=None):
     rclpy.init(args=args)
     
