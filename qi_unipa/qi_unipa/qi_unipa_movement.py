@@ -88,7 +88,7 @@ class QiUnipa_Movement(Node):
         msg.x=pose[0]
         msg.y=pose[1]
         msg.y=pose[2]
-        self.getPosition_pub.publish(msg)
+        self.position_pub.publish(msg)
     
     
 def main(args=None):
