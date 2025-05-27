@@ -49,7 +49,7 @@ class QiUnipa_Movement(Node):
         else:
             self.motion_service.rest()
 
-    def set_joint_angles_with_speed(self, msg):
+    def set_angles(self, msg):
         names = msg.names
         angles = msg.angles.tolist()
         speed = msg.speed
